@@ -12,7 +12,7 @@ export default defineConfig({
   id,
   name: "Notify",
   description: "Plugin to send Caido findings to notification platforms using ProjectDiscovery Notify",
-  version: "1.0.1",
+  version: "1.0.2",
   author: {
     name: "xvffdos",
     email: "dev@xvffdos.com",

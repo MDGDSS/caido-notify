@@ -159,25 +159,21 @@ const saveNotifyIds = async () => {
 
 const manualCheckFindings = async () => {
   isCheckingFindings.value = true;
-
   // Sync before checking findings
   await syncSentFindingsToStorage();
-
   const result = await sdk.backend.manualCheckFindings();
-
   if (result.kind === "Ok") {
     await syncSentFindingsToStorage();
     sdk.window.showToast(result.value, { variant: "success" });
   } else {
     sdk.window.showToast(result.error, { variant: "error" });
   }
-
   isCheckingFindings.value = false;
 };
 
 const saveProviderConfig = async () => {
   isSavingConfig.value = true;
-
+  
   const saveCustomFlagResult = await sdk.backend.saveUseCustomProviderConfig(useCustomProviderConfig.value);
   if (saveCustomFlagResult.kind === "Error") {
     sdk.window.showToast(`Failed to save custom config flag: ${saveCustomFlagResult.error}`, { variant: "error" });

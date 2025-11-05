@@ -1,5 +1,6 @@
 node_modules
 dist
 .DS_Store
-todo.md
 provider
+todo.md
+DATABASE_STORAGE_RECAP.md

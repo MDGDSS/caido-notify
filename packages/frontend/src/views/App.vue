@@ -20,8 +20,6 @@ const customReporterKey = ref("");
 const customReporterId = ref("");
 const customReporterType = ref<"id" | "provider">("id");
 const providerConfig = ref("");
-const notifyInstalled = ref<boolean | undefined>(undefined);
-const isCheckingNotify = ref(false);
 const isSavingIds = ref(false);
 const isSavingConfig = ref(false);
 const isCheckingFindings = ref(false);
@@ -168,7 +166,6 @@ const manualCheckFindings = async () => {
   const result = await sdk.backend.manualCheckFindings();
 
   if (result.kind === "Ok") {
-    // Sync after checking findings to update localStorage with newly sent findings
     await syncSentFindingsToStorage();
     sdk.window.showToast(result.value, { variant: "success" });
   } else {
@@ -205,13 +202,6 @@ const clearSentFindings = async () => {
   const result = await sdk.backend.clearSentFindings();
   if (result.kind === "Ok") {
     sentFindings.value = [];
-    try {
-      // Clear Caido storage
-      await sdk.storage.set({ sentFindings: [] });
-    } catch (e) {
-      console.error("Failed to clear storage:", e);
-    }
-    // Sync again to ensure consistency
     await syncSentFindingsToStorage();
     sdk.window.showToast("Sent findings cleared successfully", { variant: "success" });
   } else {
@@ -225,62 +215,19 @@ const syncSentFindingsToStorage = async () => {
     if (sentFindingsResult.kind === "Ok") {
       const findings = sentFindingsResult.value || [];
       sentFindings.value = findings;
-      await sdk.storage.set({ sentFindings: findings });
-      console.log(`Synced ${findings.length} sent findings to Caido storage`);
-    } else {
-      
-      await sdk.storage.set({ sentFindings: [] });
-      console.log("Backend getSentFindings failed, set storage to empty array");
     }
   } catch (e) {
-    console.error("Failed to sync sent findings to storage:", e);
-    
-    try {
-      const current = sdk.storage.get();
-      if (current === undefined || current === null || typeof current !== "object" || !("sentFindings" in current)) {
-        await sdk.storage.set({ sentFindings: [] });
-      }
-    } catch (err) {
-      console.error("Failed to ensure storage key:", err);
-    }
+    console.error("Failed to sync sent findings:", e);
   }
 };
 
 onMounted(() => {
   loadConfig();
-  
-  
-  try {
-    const storage = sdk.storage.get();
-    if (storage && typeof storage === "object" && "sentFindings" in storage) {
-      const stored = storage.sentFindings;
-      if (Array.isArray(stored)) {
-        sentFindings.value = stored;
-      }
-    }
-  } catch (e) {
-    console.error("Failed to load from storage:", e);
-  }
-  
-  
   syncSentFindingsToStorage();
   
-  
   const eventSubscription = sdk.backend.onEvent("findings-sent", () => {
-    
     syncSentFindingsToStorage();
   });
-  
-  
-  sdk.storage.onChange((value) => {
-    if (value && typeof value === "object" && "sentFindings" in value) {
-      const stored = value.sentFindings;
-      if (Array.isArray(stored)) {
-        sentFindings.value = stored;
-      }
-    }
-  });
-  
   
   onUnmounted(() => {
     eventSubscription.stop();
@@ -415,18 +362,6 @@ onMounted(() => {
               @click="saveNotifyIds"
               :loading="isSavingIds"
             />
-            <!-- <Button
-              :label="notifyInstalled === undefined ? 'Check Notify Installation' : (notifyInstalled ? '✓ Notify Installed' : '✗ Notify Not Installed')"
-              :loading="isCheckingNotify"
-              @click="checkNotify"
-              :severity="notifyInstalled === true ? 'success' : notifyInstalled === false ? 'danger' : 'secondary'"
-            /> -->
-            <!-- <Button
-              label="Test Check Findings"
-              @click="manualCheckFindings"
-              :loading="isCheckingFindings"
-              severity="secondary"
-            /> -->
           </div>
         </div>
         </TabPanel>

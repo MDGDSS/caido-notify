@@ -21,6 +21,8 @@ type NotifyConfig = {
   sentFindings?: string[];
 };
 
+
+//TODO add more testing for macOS
 const getConfigDir = (): string => {
   const home = homedir();
   if (!home) {
@@ -31,10 +33,6 @@ const getConfigDir = (): string => {
     return join(fallback, ".config", "notify-caido");
   }
   return join(home, ".config", "notify-caido");
-};
-
-const getNotifyIdsFile = (): string => {
-  return join(getConfigDir(), "notify-ids.json");
 };
 
 const getProviderConfigFile = (): string => {
@@ -53,14 +51,6 @@ const getDefaultNotifyProviderConfigFile = (): string => {
   return join(home, ".config", "notify", "provider-config.yaml");
 };
 
-const getExcludedFindingsFile = (): string => {
-  return join(getConfigDir(), "excluded-findings.json");
-};
-
-const getSentFindingsFile = (): string => {
-  return join(getConfigDir(), "sent-findings.json");
-};
-
 const ensureConfigDir = async (): Promise<Result<void>> => {
   try {
     const configDir = getConfigDir();
@@ -74,45 +64,16 @@ const ensureConfigDir = async (): Promise<Result<void>> => {
   }
 };
 
+
+//TODO a bit ligth improve error handling
 const getNotifyCommand = (): string => {
   return "notify";
 };
 
-const checkNotifyInstalled = async (sdk: SDK): Promise<Result<boolean>> => {
-  return new Promise((resolve) => {
-    const notifyCmd = getNotifyCommand();
-    const proc = spawn(notifyCmd, ["-version"], {
-      shell: true,
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    proc.stdout?.on("data", (data: Buffer) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr?.on("data", (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    proc.on("close", (code: number | undefined) => {
-      if (code === 0 || stdout.length > 0 || stderr.includes("notify")) {
-        resolve({ kind: "Ok", value: true });
-      } else {
-        resolve({ kind: "Ok", value: false });
-      }
-    });
-
-    proc.on("error", () => {
-      resolve({ kind: "Ok", value: false });
-    });
-  });
-};
 
 const saveNotifyIds = async (sdk: SDK, config: NotifyConfig): Promise<Result<void>> => {
   try {
-    if (sdk.storage) {
+    if (sdk.storage !== undefined) {
       await sdk.storage.set("notify-ids", JSON.stringify(config));
       return { kind: "Ok", value: undefined };
     }
@@ -120,9 +81,8 @@ const saveNotifyIds = async (sdk: SDK, config: NotifyConfig): Promise<Result<voi
     if (dirResult.kind === "Error") {
       return dirResult;
     }
-    const filePath = getNotifyIdsFile();
+    const filePath = join(getConfigDir(), "notify-ids.json");
     await fs.writeFile(filePath, JSON.stringify(config, null, 2), "utf-8");
-    sdk.console.log("Notify IDs saved successfully");
     return { kind: "Ok", value: undefined };
   } catch (error) {
     return {
@@ -134,7 +94,7 @@ const saveNotifyIds = async (sdk: SDK, config: NotifyConfig): Promise<Result<voi
 
 const getNotifyIds = async (sdk: SDK): Promise<Result<NotifyConfig>> => {
   try {
-    if (sdk.storage) {
+    if (sdk.storage !== undefined) {
       const stored = await sdk.storage.get("notify-ids");
       if (stored === undefined) {
         return { kind: "Ok", value: {} };
@@ -142,7 +102,7 @@ const getNotifyIds = async (sdk: SDK): Promise<Result<NotifyConfig>> => {
       const config = JSON.parse(stored) as NotifyConfig;
       return { kind: "Ok", value: config };
     }
-    const filePath = getNotifyIdsFile();
+    const filePath = join(getConfigDir(), "notify-ids.json");
     await ensureConfigDir();
     try {
       const content = await fs.readFile(filePath, "utf-8");
@@ -206,9 +166,11 @@ const getProviderConfig = async (sdk: SDK): Promise<Result<string>> => {
   }
 };
 
+
+//Exclude got priority on other fields keep it like this
 const getExcludedFindings = async (sdk: SDK): Promise<Result<string[]>> => {
   try {
-    if (sdk.storage) {
+    if (sdk.storage !== undefined) {
       const stored = await sdk.storage.get("excluded-findings");
       if (stored === undefined) {
         return { kind: "Ok", value: [] };
@@ -216,7 +178,7 @@ const getExcludedFindings = async (sdk: SDK): Promise<Result<string[]>> => {
       const excluded = JSON.parse(stored) as string[];
       return { kind: "Ok", value: excluded };
     }
-    const filePath = getExcludedFindingsFile();
+    const filePath = join(getConfigDir(), "excluded-findings.json");
     await ensureConfigDir();
     try {
       const content = await fs.readFile(filePath, "utf-8");
@@ -235,7 +197,7 @@ const getExcludedFindings = async (sdk: SDK): Promise<Result<string[]>> => {
 
 const saveExcludedFindings = async (sdk: SDK, excluded: string[]): Promise<Result<void>> => {
   try {
-    if (sdk.storage) {
+    if (sdk.storage !== undefined) {
       await sdk.storage.set("excluded-findings", JSON.stringify(excluded));
       return { kind: "Ok", value: undefined };
     }
@@ -243,7 +205,7 @@ const saveExcludedFindings = async (sdk: SDK, excluded: string[]): Promise<Resul
     if (dirResult.kind === "Error") {
       return dirResult;
     }
-    const filePath = getExcludedFindingsFile();
+    const filePath = join(getConfigDir(), "excluded-findings.json");
     await fs.writeFile(filePath, JSON.stringify(excluded, null, 2), "utf-8");
     return { kind: "Ok", value: undefined };
   } catch (error) {
@@ -255,18 +217,30 @@ const saveExcludedFindings = async (sdk: SDK, excluded: string[]): Promise<Resul
 };
 
 type SentFinding = {
+  //foramt
   findingId: string;
   timestamp: number;
 };
 
-let sentFindingsCache: SentFinding[] = [];
-
 const getSentFindings = async (sdk: SDK): Promise<Result<SentFinding[]>> => {
   try {
-    if (sentFindingsCache === undefined || sentFindingsCache === null) {
-      sentFindingsCache = [];
+    if (sdk.storage !== undefined) {
+      const stored = await sdk.storage.get("sent-findings");
+      if (stored === undefined) {
+        return { kind: "Ok", value: [] };
+      }
+      const findings = JSON.parse(stored) as SentFinding[];
+      return { kind: "Ok", value: findings };
     }
-    return { kind: "Ok", value: [...sentFindingsCache] };
+    const filePath = join(getConfigDir(), "sent-findings.json");
+    await ensureConfigDir();
+    try {
+      const content = await fs.readFile(filePath, "utf-8");
+      const findings = JSON.parse(content) as SentFinding[];
+      return { kind: "Ok", value: findings };
+    } catch {
+      return { kind: "Ok", value: [] };
+    }
   } catch (error) {
     sdk.console.error(`Error reading sent findings: ${error instanceof Error ? error.message : String(error)}`);
     return {
@@ -278,10 +252,16 @@ const getSentFindings = async (sdk: SDK): Promise<Result<SentFinding[]>> => {
 
 const saveSentFindings = async (sdk: SDK, sent: SentFinding[]): Promise<Result<void>> => {
   try {
-    if (sentFindingsCache === undefined || sentFindingsCache === null) {
-      sentFindingsCache = [];
+    if (sdk.storage !== undefined) {
+      await sdk.storage.set("sent-findings", JSON.stringify(sent));
+      return { kind: "Ok", value: undefined };
     }
-    sentFindingsCache = [...sent];
+    const dirResult = await ensureConfigDir();
+    if (dirResult.kind === "Error") {
+      return dirResult;
+    }
+    const filePath = join(getConfigDir(), "sent-findings.json");
+    await fs.writeFile(filePath, JSON.stringify(sent, null, 2), "utf-8");
     return { kind: "Ok", value: undefined };
   } catch (error) {
     sdk.console.error(`Error saving sent findings: ${error instanceof Error ? error.message : String(error)}`);
@@ -294,7 +274,16 @@ const saveSentFindings = async (sdk: SDK, sent: SentFinding[]): Promise<Result<v
 
 const clearSentFindings = async (sdk: SDK): Promise<Result<void>> => {
   try {
-    sentFindingsCache = [];
+    if (sdk.storage !== undefined) {
+      await sdk.storage.set("sent-findings", JSON.stringify([]));
+      return { kind: "Ok", value: undefined };
+    }
+    const dirResult = await ensureConfigDir();
+    if (dirResult.kind === "Error") {
+      return dirResult;
+    }
+    const filePath = join(getConfigDir(), "sent-findings.json");
+    await fs.writeFile(filePath, JSON.stringify([], null, 2), "utf-8");
     return { kind: "Ok", value: undefined };
   } catch (error) {
     return {
@@ -304,11 +293,25 @@ const clearSentFindings = async (sdk: SDK): Promise<Result<void>> => {
   }
 };
 
-let checkDelayCache = 60000;
-
 const getCheckDelay = async (sdk: SDK): Promise<Result<number>> => {
   try {
-    return { kind: "Ok", value: checkDelayCache };
+    if (sdk.storage !== undefined) {
+      const stored = await sdk.storage.get("check-delay");
+      if (stored === undefined) {
+        return { kind: "Ok", value: 60000 };
+      }
+      const delay = JSON.parse(stored) as number;
+      return { kind: "Ok", value: delay };
+    }
+    const filePath = join(getConfigDir(), "check-delay.json");
+    await ensureConfigDir();
+    try {
+      const content = await fs.readFile(filePath, "utf-8");
+      const delay = JSON.parse(content) as number;
+      return { kind: "Ok", value: delay };
+    } catch {
+      return { kind: "Ok", value: 60000 };
+    }
   } catch (error) {
     return {
       kind: "Error",
@@ -322,7 +325,16 @@ const saveCheckDelay = async (sdk: SDK, delay: number): Promise<Result<void>> =>
     if (delay < 1000) {
       return { kind: "Error", error: "Delay must be at least 1000ms (1 second)" };
     }
-    checkDelayCache = delay;
+    if (sdk.storage !== undefined) {
+      await sdk.storage.set("check-delay", JSON.stringify(delay));
+      return { kind: "Ok", value: undefined };
+    }
+    const dirResult = await ensureConfigDir();
+    if (dirResult.kind === "Error") {
+      return dirResult;
+    }
+    const filePath = join(getConfigDir(), "check-delay.json");
+    await fs.writeFile(filePath, JSON.stringify(delay, null, 2), "utf-8");
     return { kind: "Ok", value: undefined };
   } catch (error) {
     return {
@@ -332,11 +344,25 @@ const saveCheckDelay = async (sdk: SDK, delay: number): Promise<Result<void>> =>
   }
 };
 
-let useCustomProviderConfigCache = true;
-
 const getUseCustomProviderConfig = async (sdk: SDK): Promise<Result<boolean>> => {
   try {
-    return { kind: "Ok", value: useCustomProviderConfigCache };
+    if (sdk.storage !== undefined) {
+      const stored = await sdk.storage.get("use-custom-provider-config");
+      if (stored === undefined) {
+        return { kind: "Ok", value: true };
+      }
+      const useCustom = JSON.parse(stored) as boolean;
+      return { kind: "Ok", value: useCustom };
+    }
+    const filePath = join(getConfigDir(), "use-custom-provider-config.json");
+    await ensureConfigDir();
+    try {
+      const content = await fs.readFile(filePath, "utf-8");
+      const useCustom = JSON.parse(content) as boolean;
+      return { kind: "Ok", value: useCustom };
+    } catch {
+      return { kind: "Ok", value: true };
+    }
   } catch (error) {
     return {
       kind: "Error",
@@ -347,7 +373,16 @@ const getUseCustomProviderConfig = async (sdk: SDK): Promise<Result<boolean>> =>
 
 const saveUseCustomProviderConfig = async (sdk: SDK, useCustom: boolean): Promise<Result<void>> => {
   try {
-    useCustomProviderConfigCache = useCustom;
+    if (sdk.storage !== undefined) {
+      await sdk.storage.set("use-custom-provider-config", JSON.stringify(useCustom));
+      return { kind: "Ok", value: undefined };
+    }
+    const dirResult = await ensureConfigDir();
+    if (dirResult.kind === "Error") {
+      return dirResult;
+    }
+    const filePath = join(getConfigDir(), "use-custom-provider-config.json");
+    await fs.writeFile(filePath, JSON.stringify(useCustom, null, 2), "utf-8");
     return { kind: "Ok", value: undefined };
   } catch (error) {
     return {
@@ -479,10 +514,6 @@ const checkAndSendFindings = async (sdk: SDK): Promise<Result<void>> => {
   
   const sentFindings = sentResult.value || [];
   
-  if (sentFindingsCache === undefined || sentFindingsCache === null) {
-    sentFindingsCache = [];
-  }
-  
   const sentIds = new Set<string>();
   if (sentFindings.length > 0) {
     for (const finding of sentFindings) {
@@ -500,6 +531,9 @@ const checkAndSendFindings = async (sdk: SDK): Promise<Result<void>> => {
   
   const finalSentIds = new Set(cleanedSentFindings.map((f) => f.findingId));
 
+
+  //REALLY DONT LIKE GRAPHQL
+  //PRAY THAT IT WORKS
   try {
     const query = `
       query GetFindings {
@@ -601,7 +635,7 @@ const checkAndSendFindings = async (sdk: SDK): Promise<Result<void>> => {
       newSentFindings.push({ findingId, timestamp });
     }
 
-    // Save findings immediately to cache before sending (so they're marked as sent even if notify fails)
+    // Save findings immediately to storage before sending (so they're marked as sent even if notify fails)
     const updatedSent = [...cleanedSentFindings, ...newSentFindings];
     await saveSentFindings(sdk, updatedSent);
 
@@ -635,6 +669,7 @@ const checkAndSendFindings = async (sdk: SDK): Promise<Result<void>> => {
     // It seem to be more faster to group by reporter than to send each finding separately 
     // Still check the limit of notify so too fast can be an issue too stay like this for now
     // Send findings grouped by reporter, using custom IDs when available
+    // Clear all finding from evenbetter dont seem to reset the lcoal findings id it keep incrementing 
     const sendPromises: Promise<Result<void>>[] = [];
     
     for (const [reporter, reporterFindings] of findingsByReporter.entries()) {
@@ -643,6 +678,7 @@ const checkAndSendFindings = async (sdk: SDK): Promise<Result<void>> => {
       let idsType = defaultIdsType;
       
       // Check for custom ID (case-insensitive match)
+      //TODO case sensitive match
       if (config.customFindingIds) {
         const reporterKey = Object.keys(config.customFindingIds).find(
           (key) => key.toLowerCase() === reporter.toLowerCase()
@@ -739,7 +775,6 @@ const manualCheckFindings = async (sdk: SDK): Promise<Result<string>> => {
 };
 
 export type API = DefineAPI<{
-  checkNotifyInstalled: typeof checkNotifyInstalled;
   saveNotifyIds: typeof saveNotifyIds;
   getNotifyIds: typeof getNotifyIds;
   saveProviderConfig: typeof saveProviderConfig;
@@ -757,6 +792,8 @@ export type API = DefineAPI<{
   saveUseCustomProviderConfig: typeof saveUseCustomProviderConfig;
 }>;
 
+
+//TODO MEttre a jour l IDE
 let checkInterval: ReturnType<typeof setInterval> | undefined;
 
 const startCheckingFindings = async (sdk: SDK<API>) => {
@@ -777,7 +814,6 @@ const startCheckingFindings = async (sdk: SDK<API>) => {
 };
 
 export function init(sdk: SDK<API, BackendEvents>) {
-  sdk.api.register("checkNotifyInstalled", checkNotifyInstalled);
   sdk.api.register("saveNotifyIds", saveNotifyIds);
   sdk.api.register("getNotifyIds", getNotifyIds);
   sdk.api.register("saveProviderConfig", saveProviderConfig);

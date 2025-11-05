@@ -1,6 +1,6 @@
 # Notify Plugin for Caido
 
-A Caido plugin that automatically sends findings to notification platforms (Slack, Discord, Telegram, etc.) using [ProjectDiscovery Notify](https://github.com/projectdiscovery/notify).
+A Caido plugin that automatically sends findings to notification platforms (Slack, Discord, Telegram, etc.) using [ProjectDiscovery Notify](https://github.com/projectdiscovery/notify). This plugin was originally created for caido-cli to ease automation.
 
 ## Features
 
